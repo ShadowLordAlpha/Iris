@@ -11,61 +11,83 @@ import com.shadowcs.iris.worker.Worker;
 // Essentually just keeps all the workers nice and central so its easy to close them all when needed
 // and contains some simple and reusable code to make setting up easier
 public class Network implements AutoCloseable {
-	
-	private Worker worker;
+
+	public static final int SINGLE = 1;
+	public static final int DUAL = 2;
+	public static final int ALL = 3;
+
+	// TODO: this needs to be reworked to support near unlimited workers as well as worker limits so that only x can connect to each worker
+	// or something
+	private Worker connectWorker;
+	private Worker readWorker;
+	private Worker writeWorker;
 
 	public Network() {
-		worker = new Worker();
-
-		worker.setAcceptable(key -> {
-			// this means that a new client has hit the port our main
-            // socket is listening on, so we need to accept the  connection
-            // and add the new client socket to our select pool for reading
-            // a command later
-            System.out.println("Accepting connection!");
-            // this will be the ServerSocketChannel we initially registered
-            // with the selector in main()
-            ServerSocketChannel sch = (ServerSocketChannel)key.channel();
-			try {
-				SocketChannel ch = sch.accept();
-				ch.configureBlocking(false);
-			} catch(IOException e) {
-				// TODO Auto-generated catch block
-				e.printStackTrace();
-			}
-            
-            // ch.register(this.sel, SelectionKey.OP_READ);
-		});
+		this(DUAL);
 	}
+
+	// TODO make mode an enum?
+	public Network(int mode) {
+		switch(mode) {
+			case 1:
+				connectWorker = new Worker();
+				new Thread(connectWorker, "connect-worker").start();
+				writeWorker = connectWorker;
+				readWorker = connectWorker;
+			case 2:
+				readWorker = new Worker();
+				new Thread(connectWorker, "read-worker").start();
+				writeWorker = readWorker;
+			case 3:
+				writeWorker = new Worker();
+				new Thread(connectWorker, "write-worker").start();
+				break;
+			default:
+				// TODO error
+				break;
+		}
+	}
+
+	public Worker getConnectWorker() {
+		return connectWorker;
+	}
+
+	public Worker getReadWorker() {
+		return readWorker;
+	}
+
+	public Worker getWriteWorker() {
+		return writeWorker;
+	}
+
+	// TODO: default worker operations
 	
 	public void startServer() {
 		startServer(new InetSocketAddress(25565));
 	}
-	
+
 	public void startServer(InetSocketAddress address) {
-		
+
 		try {
 			ServerSocketChannel sch = ServerSocketChannel.open();
 			sch.configureBlocking(false);
 			sch.bind(address);
-			
-			worker.addMaintenance(sel -> {
+
+			getConnectWorker().addMaintenance(sel -> {
 				try {
 					sch.register(sel, SelectionKey.OP_ACCEPT);
 				} catch(ClosedChannelException e) {
 					e.printStackTrace();
 				}
 			});
-			
-			new Thread(worker).start();
 		} catch(IOException e) {
 			// TODO Auto-generated catch block
 			e.printStackTrace();
 		}
 	}
-	
+
 	public void startClient() {
-		// TODO: 
+		// TODO:
 	}
 
 	// we actually don't want to use the event manager to extensively
@@ -73,9 +95,9 @@ public class Network implements AutoCloseable {
 	// as waste of processing
 	@Override
 	public void close() throws Exception {
-		
+
 	}
-	
+
 	public static void main(String[] args) {
 		new Network().startServer();
 

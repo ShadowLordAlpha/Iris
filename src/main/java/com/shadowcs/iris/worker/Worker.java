@@ -78,6 +78,10 @@ public class Worker implements Runnable, AutoCloseable {
 		}
 	}
 
+	public Selector getSelector() {
+		return selector;
+	}
+	
 	public void setAcceptable(Consumer<SelectionKey> acceptable) {
 		this.acceptable = acceptable;
 	}
